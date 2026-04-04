@@ -50,6 +50,28 @@ venv/Scripts/python lab/face/download_data.py --skip-download --skip-extract
 
 ---
 
+## Syncing ChromaDB with Google Drive
+
+The enrollment DB can be shared between team members via Google Drive as `chromadb.zip`.
+
+```bash
+# fetch the DB (no setup needed — uses gdown + OAuth)
+venv/Scripts/python lab/face/sync_db.py --download
+
+# push your local DB after enrollment
+venv/Scripts/python lab/face/sync_db.py --upload
+```
+
+**One-time OAuth2 setup** (needed only for `--upload`):
+1. [Google Cloud Console](https://console.cloud.google.com/) → Create project
+2. APIs & Services → Enable **Google Drive API**
+3. Credentials → Create → **OAuth 2.0 Client ID** → Desktop app
+4. Download JSON → save as `lab/face/client_secrets.json`
+
+On first `--upload` run the browser opens for consent; the token is saved to `token.json` for future runs. Add both files to `.gitignore`.
+
+---
+
 ## Data storage
 
 Face embeddings (512-d ArcFace vectors) are stored in a **ChromaDB** persistent vector database at `embeddings/chromadb/`. Raw images are **never** stored in the database — only the embeddings (project spec requirement).
