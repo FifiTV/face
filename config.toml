@@ -1,0 +1,22 @@
+[data]
+# Google Drive folder ID with FaceScrub zip files
+gdrive_folder_id = "1Y7In1IRHTehIGXV1bcMYBG0gUdci9w0c"
+
+# Random seed for all splits — change to reproduce a different partition
+seed = 44
+
+# Number of people to enroll (must be >= 80 per project spec)
+n_enrolled = 100
+
+# Split ratios for the *remaining* people after enrollment (must sum to 1.0)
+train_ratio = 0.70
+val_ratio   = 0.20
+test_ratio  = 0.10
+
+[paths]
+raw_dir      = "data/raw"
+train_dir    = "data/train"
+val_dir      = "data/val"
+test_dir     = "data/test"
+enrolled_dir = "data/enrolled"
+db_dir       = "embeddings/chromadb"

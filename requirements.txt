@@ -1,0 +1,6 @@
+torch
+torchvision
+insightface
+onnxruntime
+chromadb
+gdown

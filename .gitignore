@@ -1,0 +1,7 @@
+data/enrolled/*
+data/test/*
+data/val/*
+data/train/*
+data/raw/*
+
+*.onnx
