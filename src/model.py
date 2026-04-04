@@ -4,6 +4,7 @@ For custom PyTorch fine-tuning use the FaceEmbedder class with a torch backbone.
 """
 from pathlib import Path
 
+import cv2
 import numpy as np
 
 # InsightFace appends "models/" to root automatically, so point one level up
@@ -32,24 +33,51 @@ def get_insightface_model(model_name: str = "buffalo_l", ctx_id: int = 0):
     return app
 
 
-def get_embedding(app, img_bgr: np.ndarray) -> np.ndarray | None:
+def _embed_crop(app, img_bgr: np.ndarray) -> np.ndarray:
+    """
+    Feed a pre-cropped face image directly to ArcFace, bypassing detection.
+
+    Used as a fallback for datasets where images are already aligned face crops
+    (e.g. FaceScrub), where the detector often fails because the face fills
+    the entire image and falls below the minimum detection size.
+
+    Input is resized to 112x112 (standard ArcFace input size), normalised, and
+    passed directly to the recognition ONNX model.
+    """
+    rec = app.models["recognition"]
+    # get_feat expects a list of BGR uint8 images — it handles normalisation internally
+    img = cv2.resize(img_bgr, (112, 112))
+    feat = rec.get_feat([img])                               # (1, 512)
+    emb = feat[0]
+    norm = np.linalg.norm(emb)
+    return emb / norm if norm > 0 else emb
+
+
+def get_embedding(app, img_bgr: np.ndarray, fallback: bool = True) -> np.ndarray | None:
     """
     Get ArcFace embedding for the largest face in the image.
 
+    If detection finds no face and fallback=True, the whole image is treated as
+    a pre-cropped face (appropriate for FaceScrub and similar datasets).
+
     Args:
-        app: FaceAnalysis instance from get_insightface_model()
-        img_bgr: BGR image as numpy array
+        app:      FaceAnalysis instance from get_insightface_model()
+        img_bgr:  BGR image as numpy array
+        fallback: Use full image as face crop when detection fails (default True)
     Returns:
-        512-d normalized embedding or None if no face detected
+        512-d L2-normalised embedding, or None only when fallback=False and no face found
     """
     faces = app.get(img_bgr)
-    if not faces:
-        return None
-    # pick face with largest bounding box area
-    face = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
-    return face.normed_embedding  # shape (512,), L2-normalized
+    if faces:
+        face = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
+        return face.normed_embedding  # shape (512,), L2-normalised
+
+    if fallback:
+        return _embed_crop(app, img_bgr)
+
+    return None
 
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-    """Cosine similarity between two L2-normalized embeddings."""
+    """Cosine similarity between two L2-normalised embeddings."""
     return float(np.dot(a, b))
