@@ -2,6 +2,10 @@
 Face embedding model using InsightFace (ArcFace backend, ONNX runtime — no TensorFlow).
 For custom PyTorch fine-tuning use the FaceEmbedder class with a torch backbone.
 """
+import os
+import sys
+import warnings
+from contextlib import contextmanager
 from pathlib import Path
 
 import cv2
@@ -10,6 +14,23 @@ import numpy as np
 # InsightFace appends "models/" to root automatically, so point one level up
 # to get weights stored at lab/face/models/<model_name>/
 DEFAULT_MODEL_ROOT = Path(__file__).parent.parent
+
+
+@contextmanager
+def _quiet():
+    """Suppress verbose stdout/stderr from InsightFace and ONNX runtime."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        warnings.filterwarnings("ignore", category=UserWarning)
+        # Redirect C-level stdout/stderr (ONNX runtime prints via printf)
+        devnull = open(os.devnull, "w")
+        old_stdout, old_stderr = sys.stdout, sys.stderr
+        sys.stdout = sys.stderr = devnull
+        try:
+            yield
+        finally:
+            sys.stdout, sys.stderr = old_stdout, old_stderr
+            devnull.close()
 
 
 def get_insightface_model(model_name: str = "buffalo_l", ctx_id: int = 0):
@@ -24,12 +45,13 @@ def get_insightface_model(model_name: str = "buffalo_l", ctx_id: int = 0):
     """
     from insightface.app import FaceAnalysis
 
-    app = FaceAnalysis(
-        name=model_name,
-        root=str(DEFAULT_MODEL_ROOT),
-        allowed_modules=["detection", "recognition"],
-    )
-    app.prepare(ctx_id=ctx_id, det_size=(640, 640))
+    with _quiet():
+        app = FaceAnalysis(
+            name=model_name,
+            root=str(DEFAULT_MODEL_ROOT),
+            allowed_modules=["detection", "recognition"],
+        )
+        app.prepare(ctx_id=ctx_id, det_size=(640, 640))
     return app
 
 
@@ -40,14 +62,11 @@ def _embed_crop(app, img_bgr: np.ndarray) -> np.ndarray:
     Used as a fallback for datasets where images are already aligned face crops
     (e.g. FaceScrub), where the detector often fails because the face fills
     the entire image and falls below the minimum detection size.
-
-    Input is resized to 112x112 (standard ArcFace input size), normalised, and
-    passed directly to the recognition ONNX model.
     """
     rec = app.models["recognition"]
     # get_feat expects a list of BGR uint8 images — it handles normalisation internally
     img = cv2.resize(img_bgr, (112, 112))
-    feat = rec.get_feat([img])                               # (1, 512)
+    feat = rec.get_feat([img])   # (1, 512)
     emb = feat[0]
     norm = np.linalg.norm(emb)
     return emb / norm if norm > 0 else emb
@@ -67,7 +86,10 @@ def get_embedding(app, img_bgr: np.ndarray, fallback: bool = True) -> np.ndarray
     Returns:
         512-d L2-normalised embedding, or None only when fallback=False and no face found
     """
-    faces = app.get(img_bgr)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        faces = app.get(img_bgr)
+
     if faces:
         face = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
         return face.normed_embedding  # shape (512,), L2-normalised
