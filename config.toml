@@ -1,6 +1,9 @@
 [data]
-# Google Drive folder ID with FaceScrub zip files
-gdrive_folder_id = "1Y7In1IRHTehIGXV1bcMYBG0gUdci9w0c"
+# Google Drive folder ID with FaceScrub zip files (subfolder)
+gdrive_folder_id = "1xaggTEK0jeSVX9bgGIefq0-FeR8Eq8PK"
+
+# Google Drive folder ID for ChromaDB backup (chromadb.zip)
+gdrive_chromadb_folder_id = "1CyrpU9Axgip8ZmXlRu4z-2aknnSvyan6"
 
 # Random seed for all splits — change to reproduce a different partition
 seed = 44
