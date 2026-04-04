@@ -1,6 +1,8 @@
 torch
 torchvision
 insightface
-onnxruntime
+onnxruntime-gpu
 chromadb
 gdown
+google-api-python-client
+google-auth-oauthlib
