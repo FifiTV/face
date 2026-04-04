@@ -5,3 +5,6 @@ data/train/*
 data/raw/*
 
 *.onnx
+embeddings/chromadb/*
+*.zip
+*.pyc
