@@ -47,17 +47,29 @@ venv/Scripts/python lab/face/download_data.py --skip-download   # zips already i
 venv/Scripts/python lab/face/download_data.py --skip-download --skip-extract  # only re-split
 ```
 
-### 4. Enroll users into ChromaDB
+### 4. Split + enroll into ChromaDB
 
-Processes every image in `data/enrolled/<name>/`, averages the embeddings per person, L2-normalises, and stores one vector in ChromaDB. ChromaDB writes to disk automatically — no manual save needed.
+`enroll.py` does both steps automatically:
+
+1. **Split** — each person's images in `data/enrolled/` are split per project spec  
+   *("tests must use photos not used for enrollment")*
+2. **Enroll** — averaged embedding per person is stored in ChromaDB
+
+| Folder | Share | Purpose |
+|---|---|---|
+| `data/enrolled/` | 70% | Building embeddings (ChromaDB) |
+| `data/enrolled_test/` | 30% | Genuine-user tests (Task 1, 3, 4, 7) |
 
 ```bash
-venv/Scripts/python lab/face/enroll.py              # incremental (skips existing users)
-venv/Scripts/python lab/face/enroll.py --update     # re-enroll everyone
-venv/Scripts/python lab/face/enroll.py --reset      # wipe DB, enroll from scratch
+venv/Scripts/python lab/face/enroll.py              # split + enroll (default)
+venv/Scripts/python lab/face/enroll.py --no-split   # skip split (already done)
+venv/Scripts/python lab/face/enroll.py --update     # re-enroll all, keep split
+venv/Scripts/python lab/face/enroll.py --reset      # wipe DB + redo split + enroll from scratch
+venv/Scripts/python lab/face/enroll.py --detect     # use face detector (for raw photos)
 ```
 
-By default images are treated as pre-cropped faces (correct for FaceScrub). For raw photos use `--detect` to run the RetinaFace detector first.
+Split ratio is set by `enrolled_split.test_ratio` in `config.toml` (default `0.30`).  
+To only split without enrolling: `venv/Scripts/python lab/face/split_enrolled.py`
 
 ### 5. Query the database
 
@@ -88,6 +100,23 @@ venv/Scripts/python lab/face/fetch_person.py "Anna Nowak"  --count 20 --no-valid
 ```
 
 Images are saved to `data/enrolled/<Name_Surname>/` by default (resumable — reruns only fetch what's missing).
+
+---
+
+## Importing faces from an external folder
+
+If you already have a folder of face images organised as `<root>/<person_name>/img.jpg`, import them into `data/enrolled/` and run the split in one step:
+
+```bash
+venv/Scripts/python lab/face/import_faces.py /path/to/faces
+venv/Scripts/python lab/face/import_faces.py /path/to/faces --move          # move instead of copy
+venv/Scripts/python lab/face/import_faces.py /path/to/faces --validate      # discard images without a face
+venv/Scripts/python lab/face/import_faces.py /path/to/faces --no-split      # skip split step
+venv/Scripts/python lab/face/import_faces.py /path/to/faces --out data/test # custom destination
+venv/Scripts/python lab/face/import_faces.py /path/to/faces --dry-run       # preview only
+```
+
+This is an **optional step** between `fetch_person.py` and `enroll.py`. It merges the source subfolders into `data/enrolled/` (renaming files to sequential indices to avoid collisions) and then re-runs the 70/30 split.
 
 ---
 
@@ -126,6 +155,7 @@ lab/face/
 ├── config.toml           # seed, split ratios, GDrive IDs, paths
 ├── download_model.py     # fetch ArcFace weights -> models/buffalo_l/
 ├── download_data.py      # fetch & split FaceScrub
+├── split_enrolled.py     # split enrolled/ -> enrolled/ (70%) + enrolled_test/ (30%)
 ├── enroll.py             # build ChromaDB from data/enrolled/
 ├── query.py              # identify a face against the DB
 ├── fetch_person.py       # download extra images via Bing search
@@ -136,7 +166,8 @@ lab/face/
 │   ├── train/            # training identities
 │   ├── val/              # validation identities
 │   ├── test/             # test identities
-│   └── enrolled/         # identities enrolled in the authorization DB
+│   ├── enrolled/         # images used to BUILD embeddings (70% per person)
+│   └── enrolled_test/    # held-out images for testing genuine users (30%)
 ├── embeddings/chromadb/  # ChromaDB vector store — git-ignored (sync_db.py)
 ├── src/
 │   ├── model.py          # InsightFace wrapper + fallback crop embedding
