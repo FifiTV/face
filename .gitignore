@@ -1,4 +1,5 @@
 data/enrolled/*
+data/enrolled_test/*
 data/test/*
 data/val/*
 data/train/*
