@@ -11,7 +11,13 @@ Expected folder structure:
 
 Each user is represented by a single *averaged* embedding (mean of all
 per-image embeddings, re-normalised to unit length).
+
+Also provides split_enrolled_images() which separates each person's photos
+into an enrollment set (70%) and a held-out test set (30%), as required by
+the project spec ("tests must use photos not used for enrollment").
 """
+import random
+import shutil
 import time
 from pathlib import Path
 
@@ -21,6 +27,67 @@ import numpy as np
 from .database import EmbeddingDB
 from .model import get_embedding
 from .utils import list_images
+
+
+# ── Enrolled image split ──────────────────────────────────────────────────────
+
+def split_enrolled_images(
+    enrolled_dir: Path,
+    test_dir: Path,
+    test_ratio: float = 0.30,
+    seed: int = 42,
+    reset: bool = False,
+) -> dict[str, tuple[int, int]]:
+    """
+    Split each person's images in enrolled_dir into train and test sets.
+
+    Per project spec: test images must be different from enrollment images.
+
+        enrolled_dir/<name>/  ->  keeps (1 - test_ratio) fraction
+        test_dir/<name>/      ->  receives test_ratio fraction
+
+    The split is idempotent: persons already present in test_dir are skipped
+    unless reset=True (which moves images back and re-splits).
+
+    Returns:
+        dict {person_name: (n_train, n_test)}
+    """
+    test_dir.mkdir(parents=True, exist_ok=True)
+    rng = random.Random(seed)
+    results: dict[str, tuple[int, int]] = {}
+
+    person_dirs = sorted(d for d in enrolled_dir.iterdir() if d.is_dir())
+    for person_dir in person_dirs:
+        person_test_dir = test_dir / person_dir.name
+        existing_test = list_images(person_test_dir) if person_test_dir.exists() else []
+
+        if existing_test and not reset:
+            results[person_dir.name] = (len(list_images(person_dir)), len(existing_test))
+            continue
+
+        if reset and existing_test:
+            for p in existing_test:
+                shutil.move(str(p), person_dir / p.name)
+            if person_test_dir.exists() and not list_images(person_test_dir):
+                person_test_dir.rmdir()
+
+        all_imgs = list_images(person_dir)
+        if not all_imgs:
+            results[person_dir.name] = (0, 0)
+            continue
+
+        shuffled = all_imgs[:]
+        rng.shuffle(shuffled)
+        n_test = max(1, round(len(shuffled) * test_ratio))
+        test_imgs = shuffled[:n_test]
+
+        person_test_dir.mkdir(parents=True, exist_ok=True)
+        for p in test_imgs:
+            shutil.move(str(p), person_test_dir / p.name)
+
+        results[person_dir.name] = (len(shuffled) - n_test, n_test)
+
+    return results
 
 
 def _average_embeddings(embeddings: list[np.ndarray]) -> np.ndarray:
