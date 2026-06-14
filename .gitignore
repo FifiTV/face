@@ -4,8 +4,11 @@ data/test/*
 data/val/*
 data/train/*
 data/raw/*
+data/multiple_faces/*
 
 *.onnx
 embeddings/chromadb/*
 *.zip
 *.pyc
+
+.venv

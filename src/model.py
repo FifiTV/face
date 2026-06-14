@@ -11,9 +11,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-# InsightFace appends "models/" to root automatically, so point one level up
-# to get weights stored at lab/face/models/<model_name>/
-DEFAULT_MODEL_ROOT = Path(__file__).parent.parent
+# Set INSIGHTFACE_HOME before importing insightface
+# Models will be stored at ~/.insightface/ (default insightface cache location)
+if 'INSIGHTFACE_HOME' not in os.environ:
+    os.environ['INSIGHTFACE_HOME'] = str(Path.home() / '.insightface')
 
 
 @contextmanager
@@ -35,7 +36,7 @@ def _quiet():
 
 def get_insightface_model(model_name: str = "buffalo_l", ctx_id: int = 0):
     """
-    Load InsightFace ArcFace model from lab/face/models/.
+    Load InsightFace ArcFace model from ~/.insightface/models/.
 
     Args:
         model_name: InsightFace model pack ('buffalo_l', 'buffalo_sc', etc.)
@@ -46,11 +47,7 @@ def get_insightface_model(model_name: str = "buffalo_l", ctx_id: int = 0):
     from insightface.app import FaceAnalysis
 
     with _quiet():
-        app = FaceAnalysis(
-            name=model_name,
-            root=str(DEFAULT_MODEL_ROOT),
-            allowed_modules=["detection", "recognition"],
-        )
+        app = FaceAnalysis(name=model_name)
         app.prepare(ctx_id=ctx_id, det_size=(640, 640))
     return app
 

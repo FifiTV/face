@@ -1,19 +1,22 @@
 """
-Download ArcFace model (InsightFace buffalo_l) to lab/face/models/.
-Run: venv/Scripts/python lab/face/download_model.py
+Download ArcFace model (InsightFace buffalo_l) to ~/.insightface/.
+Run: .venv/bin/python download_model.py
 """
-import cv2
-import numpy as np
+import os
 from pathlib import Path
+
+# Set INSIGHTFACE_HOME before importing insightface
+# Models will be stored at ~/.insightface/ (default insightface cache location)
+if 'INSIGHTFACE_HOME' not in os.environ:
+    os.environ['INSIGHTFACE_HOME'] = str(Path.home() / '.insightface')
+
+import numpy as np
 from insightface.app import FaceAnalysis
 
 MODEL_NAME = "buffalo_l"       # ArcFace R50 recognition + RetinaFace detector
-# InsightFace appends "models/" to root automatically -> weights end up in lab/face/models/<name>/
-MODEL_ROOT = Path(__file__).parent
-(MODEL_ROOT / "models").mkdir(exist_ok=True)
 
-print(f"Downloading model '{MODEL_NAME}' -> {MODEL_ROOT / 'models'} ...")
-app = FaceAnalysis(name=MODEL_NAME, root=str(MODEL_ROOT), allowed_modules=["detection", "recognition"])
+print(f"Downloading model '{MODEL_NAME}' to {os.environ['INSIGHTFACE_HOME']} ...")
+app = FaceAnalysis(name=MODEL_NAME)
 app.prepare(ctx_id=0, det_size=(640, 640))  # ctx_id=-1 for CPU-only
 print("Model ready.")
 

@@ -60,6 +60,15 @@ class EmbeddingDB:
         all_meta = self._col.get(include=["metadatas"])["metadatas"]
         return list({m["user_id"] for m in all_meta})
 
+    def get_all(self) -> dict[str, list[np.ndarray]]:
+        """Return all stored embeddings grouped by user_id."""
+        all_meta = self._col.get(include=["metadatas", "embeddings"])
+        users: dict[str, list[np.ndarray]] = {}
+        for metadata, embedding in zip(all_meta["metadatas"], all_meta["embeddings"]):
+            user_id = metadata["user_id"]
+            users.setdefault(user_id, []).append(np.array(embedding))
+        return users
+
     def __len__(self) -> int:
         return len(self.get_all_users())
 
@@ -80,14 +89,30 @@ class EmbeddingDB:
         """
         if self._col.count() == 0:
             raise ValueError("Database is empty — enroll users first.")
-        result = self._col.query(
-            query_embeddings=[embedding.tolist()],
-            n_results=1,
-            include=["metadatas", "distances"],
-        )
-        user_id = result["metadatas"][0][0]["user_id"]
-        similarity = 1.0 - result["distances"][0][0]
-        return user_id, similarity
+
+        try:
+            result = self._col.query(
+                query_embeddings=[embedding.tolist()],
+                n_results=1,
+                include=["metadatas", "distances"],
+            )
+            user_id = result["metadatas"][0][0]["user_id"]
+            similarity = 1.0 - result["distances"][0][0]
+            return user_id, similarity
+        except Exception:
+            # Fall back to brute-force search when the ANN index is unavailable
+            all_embeddings = self.get_all()
+            best_user = None
+            best_similarity = -1.0
+            for user_id, stored_embeddings in all_embeddings.items():
+                for ref in stored_embeddings:
+                    similarity = float(np.dot(embedding, ref))
+                    if similarity > best_similarity:
+                        best_similarity = similarity
+                        best_user = user_id
+            if best_user is None:
+                raise ValueError("Database is empty — enroll users first.")
+            return best_user, best_similarity
 
     def query_user(self, user_id: str, embedding: np.ndarray) -> float:
         """
