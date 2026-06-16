@@ -71,25 +71,47 @@ def _embed_crop(app, img_bgr: np.ndarray) -> np.ndarray:
 
 def get_embedding(app, img_bgr: np.ndarray, fallback: bool = True) -> np.ndarray | None:
     """
-    Get ArcFace embedding for the largest face in the image.
+    Get ArcFace embedding for the face that best matches:
+      - large face area
+      - proximity to image center
 
-    If detection finds no face and fallback=True, the whole image is treated as
-    a pre-cropped face (appropriate for FaceScrub and similar datasets).
-
-    Args:
-        app:      FaceAnalysis instance from get_insightface_model()
-        img_bgr:  BGR image as numpy array
-        fallback: Use full image as face crop when detection fails (default True)
-    Returns:
-        512-d L2-normalised embedding, or None only when fallback=False and no face found
+    If no face is detected and fallback=True, use the entire image as a crop.
     """
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=FutureWarning)
         faces = app.get(img_bgr)
 
     if faces:
-        face = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
-        return face.normed_embedding  # shape (512,), L2-normalised
+        h, w = img_bgr.shape[:2]
+        img_center_x = w / 2
+        img_center_y = h / 2
+
+        max_distance = np.sqrt(img_center_x**2 + img_center_y**2)
+
+        def score(face):
+            x1, y1, x2, y2 = face.bbox
+
+            # Face area
+            area = (x2 - x1) * (y2 - y1)
+            area_norm = area / (w * h)
+
+            # Face center
+            cx = (x1 + x2) / 2
+            cy = (y1 + y2) / 2
+
+            # Distance from image center
+            dist = np.sqrt(
+                (cx - img_center_x) ** 2 +
+                (cy - img_center_y) ** 2
+            )
+
+            center_score = 1.0 - (dist / max_distance)
+
+            # Tunable weights
+            return 0.7 * area_norm + 0.3 * center_score
+
+        best_face = max(faces, key=score)
+        return best_face.normed_embedding
 
     if fallback:
         return _embed_crop(app, img_bgr)
