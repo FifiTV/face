@@ -5,6 +5,8 @@ data/val/*
 data/train/*
 data/raw/*
 data/multiple_faces/*
+data/tinyface_enrolled/*
+data/tinyface_enrolled_test/*
 
 *.onnx
 embeddings/chromadb/*
