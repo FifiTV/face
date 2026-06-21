@@ -9,3 +9,6 @@ google-auth-oauthlib
 matplotlib
 scikit-learn
 pandas
+realesrgan
+basicsr
+facexlib

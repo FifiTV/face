@@ -7,9 +7,17 @@ data/raw/*
 data/multiple_faces/*
 data/tinyface_enrolled/*
 data/tinyface_enrolled_test/*
+data/tinyface_gallery_match/*
+data/tinyface_probe/*
+
+weights/
+results/*.png
+results/enhanced_probes
 
 *.onnx
 embeddings/chromadb/*
+embeddings/chromadb_tinyface/*
+embeddings/chromadb_tinyface_enhanced/*
 *.zip
 *.pyc
 

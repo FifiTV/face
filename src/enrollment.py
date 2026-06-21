@@ -143,6 +143,7 @@ def enroll_from_folder(
     db: EmbeddingDB,
     detect: bool = False,
     skip_existing: bool = True,
+    identities_in_dirs: bool = True,
 ) -> dict[str, int]:
     """
     Batch enroll all users from enrolled_dir/<user_id>/ structure.
@@ -161,28 +162,65 @@ def enroll_from_folder(
     existing = set(db.get_all_users())
     results = {}
 
-    user_dirs = sorted(d for d in enrolled_dir.iterdir() if d.is_dir())
-    for user_dir in user_dirs:
-        user_id = user_dir.name
+    if identities_in_dirs:
+        user_dirs = sorted(d for d in enrolled_dir.iterdir() if d.is_dir())
+        for user_dir in user_dirs:
+            user_id = user_dir.name
 
-        if user_id in existing:
-            if skip_existing:
-                print(f"  {user_id}: already in DB, skipping.")
-                results[user_id] = 0
+            if user_id in existing:
+                if skip_existing:
+                    print(f"  {user_id}: already in DB, skipping.")
+                    results[user_id] = 0
+                    continue
+                else:
+                    db.remove_user(user_id)
+
+            images = [cv2.imread(str(p)) for p in list_images(user_dir)]
+            images = [img for img in images if img is not None]
+
+            if not images:
+                print(f"  WARNING: no images found for {user_id}, skipping.")
                 continue
-            else:
-                db.remove_user(user_id)
 
-        images = [cv2.imread(str(p)) for p in list_images(user_dir)]
-        images = [img for img in images if img is not None]
-
-        if not images:
-            print(f"  WARNING: no images found for {user_id}, skipping.")
-            continue
-
-        n = enroll_user_averaged(user_id, images, app, db, detect=detect)
-        results[user_id] = n
-        print(f"  {user_id}: averaged {n}/{len(images)} embeddings -> 1 vector stored")
+            n = enroll_user_averaged(user_id, images, app, db, detect=detect)
+            results[user_id] = n
+            print(f"  {user_id}: averaged {n}/{len(images)} embeddings -> 1 vector stored")
+    else:
+        # Group all files by identity_number (prefix before first '_')
+        all_files = list_images(enrolled_dir)
+        grouped: dict[str, list[Path]] = {}
+        
+        for file_path in all_files:
+            # Extract identity_number from filename [identity_number]_[image_number].jpg
+            stem = file_path.stem
+            identity_number = stem.split('_')[0]
+            
+            if identity_number not in grouped:
+                grouped[identity_number] = []
+            grouped[identity_number].append(file_path)
+        
+        # Enroll each group as a separate user
+        for identity_number in sorted(grouped.keys()):
+            user_id = identity_number
+            
+            if user_id in existing:
+                if skip_existing:
+                    print(f"  {user_id}: already in DB, skipping.")
+                    results[user_id] = 0
+                    continue
+                else:
+                    db.remove_user(user_id)
+            
+            images = [cv2.imread(str(p)) for p in grouped[user_id]]
+            images = [img for img in images if img is not None]
+            
+            if not images:
+                print(f"  WARNING: no images found for {user_id}, skipping.")
+                continue
+            
+            n = enroll_user_averaged(user_id, images, app, db, detect=detect)
+            results[user_id] = n
+            print(f"  {user_id}: averaged {n}/{len(images)} embeddings -> 1 vector stored")
 
     return results
 
